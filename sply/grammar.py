@@ -27,7 +27,10 @@ def production(rules):
 class Grammar(object):
     """Grammar-definition."""
 
+    keywords = ()
+    literals = ()
     simple_tokens = ()
+
     precedences = ()
 
     def token_error_handler(self, t):
@@ -48,14 +51,22 @@ class Grammar(object):
         else:
             print('Syntax error at EOF')
 
-    @token(r'\n+')
-    def newline(self, t):
-        t.lineno += t.value.count('\n')
-        return False
+    def get_token_names(self):
+        """Get names of all tokens.
 
-    @token(r' |\t')
-    def whitespace(self, t):
-        return False
+        all_tokens = keywords + literals + simple_tokens + method_tokens
+        """
+        token_names = (
+            list(self.keywords) +
+            list(self.literals) +
+            [name for name, _ in self.simple_tokens] +
+            [
+                method.__name__
+                for method, _ in self.get_grammar_methods('token')
+            ]
+        )
+
+        return token_names
 
     def get_grammar_methods(self, grammar_type):
         methods = []

@@ -31,7 +31,7 @@ class Rule(object):
         3. Rules without handler are sorted by length of regex
         """
         if self.handler:
-            return (1, self.handler.func_code.co_firstlineno)
+            return (1, self.handler.__code__.co_firstlineno)
         else:
             return (2, -len(self.regex))
 
@@ -51,10 +51,11 @@ class Rule(object):
 
 class Token(object):
     """Real token parsed from input by rules."""
-    def __init__(self, name, value, lineno):
+    def __init__(self, name, value, lineno, curpos):
         self.name = name
         self.value = value
         self.lineno = lineno
+        self.curpos = curpos
 
     def __repr__(self):
         return '[{}] {}: {!r}'.format(self.lineno, self.name, self.value)
@@ -71,8 +72,8 @@ class Lexer(object):
         lexer = Lexer()
         lexer.build(grammar)
         lexer.parse(data)
-        for token in lexer.token():
-            print(token)
+        for tok in lexer.token():
+            print(tok)
     """
     def build(self, grammar, debug=True):
         """Build lexical rules according to `grammar`."""
@@ -88,38 +89,47 @@ class Lexer(object):
     def token(self):
         """yeild a token dynamically per call."""
         length = len(self._input)
-        curpos = 0
-        lineno = 1
-        while curpos < length:
+        self.curpos = 0
+        self.lineno = 1
+        while self.curpos < length:
             # look for a regular expression match
-            m = self._regex.match(self._input, curpos)
+            m = self._regex.match(self._input, self.curpos)
             if m:
-                curpos = m.end()
-                value = m.group()
                 name = m.lastgroup
-                rule = self._rules[name]
-                _token = Token(name, value, lineno)
+                value = m.group()
+                tok = Token(name, value, self.lineno, self.curpos)
+                self.curpos = m.end()
 
+                rule = self._rules[name]
                 handler = rule.handler
                 if handler:
-                    interested = handler(_token)
+                    interested = handler(tok)
                     # lineno may be changed by `newline` token.
-                    lineno = _token.lineno
+                    self.lineno = tok.lineno
                     if not interested:
                         continue
 
-                yield _token
+                yield tok
             else:
-                # nothing matched, call error_handler instead
-                _token = Token('error', self._input[curpos:], lineno)
-                skip_chars = self._error_handler(_token)
-                if not skip_chars:
-                    raise LexError('invalid input: %s' % _token.value)
-                curpos += skip_chars
+                # nothing matched, see if in literals
+                char = self._input[self.curpos]
+                if char in self._literals:
+                    tok = Token(char, char, self.lineno, self.curpos)
+                    self.curpos += 1
+                    yield tok
+                else:
+                    # non-literals, call error_handler instead
+                    tok = Token('error', self._input[self.curpos:],
+                                self.lineno, self.curpos)
+                    skip_chars = self._error_handler(tok)
+                    if not skip_chars:
+                        raise LexError('invalid input: %s' % tok.value)
+                    self.curpos += skip_chars
 
     def _make_rules(self, grammar):
         """Parse grammar to generate rules."""
         self._error_handler = grammar.token_error_handler
+        self._literals = grammar.literals
 
         # get rules from simple-tokens
         rules = [

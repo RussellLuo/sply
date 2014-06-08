@@ -59,8 +59,8 @@ class Yaccer(object):
 
     def parse(self, data):
         self.lexer.parse(data)
-        for token in self.lexer.token():
-            print(token)
+        for tok in self.lexer.token():
+            print(tok)
 
     def _make_rules(self, grammar):
         """Parse grammar to generate rules."""

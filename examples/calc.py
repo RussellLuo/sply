@@ -8,16 +8,7 @@ names = {}
 
 
 class Calc(Grammar):
-    simple_tokens = [
-        ('equal', '='),
-        ('plus', '\+'),
-        ('minus', r'-'),
-        ('multiply', r'\*'),
-        ('divide', r'/'),
-        ('lparen', r'\('),
-        ('rparen', r'\)'),
-        ('name', r'\w+'),
-    ]
+    literals = '=+-*/()'
 
     precedences = [
         ('left', 'plus', 'minus'),
@@ -25,13 +16,28 @@ class Calc(Grammar):
         ('right', 'uminus'),
     ]
 
+    @token(r'[a-zA-Z_]\w*')
+    def identifier(self, t):
+        if t.value in self.keywords:
+            t.name = t.value
+        return True
+
     @token(r'\d+')
     def number(self, t):
         t.value = int(t.value)
         return True
 
+    @token(r'\n+')
+    def newline(self, t):
+        t.lineno += t.value.count('\n')
+        return False
+
+    @token(r'[ \t]+')
+    def whitespace(self, t):
+        return False
+
     @production('''
-        statement : NAME "=" expression
+        statement : identifier '=' expression
     ''')
     def statement_assign(p):
         names[p[1]] = p[3]
@@ -71,13 +77,13 @@ class Calc(Grammar):
         p[0] = p[2]
 
     @production('''
-        expression : NUMBER
+        expression : number
     ''')
     def expression_number(p):
         p[0] = p[1]
 
     @production('''
-        expression : NAME
+        expression : identifier
     ''')
     def expression_name(p):
         try:
