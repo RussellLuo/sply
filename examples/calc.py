@@ -27,12 +27,7 @@ class Calc(Grammar):
         t.value = int(t.value)
         return True
 
-    @token(r'\n+')
-    def newline(self, t):
-        t.lineno += t.value.count('\n')
-        return False
-
-    @token(r'[ \t]+')
+    @token(r'\s+')
     def whitespace(self, t):
         return False
 
@@ -110,7 +105,9 @@ def main():
 
 
 def test_lexer():
+    # Just use lexer
     from sply.lex import Lexer
+
     grammar = Calc()
     lexer = Lexer()
     lexer.build(grammar)
@@ -122,8 +119,8 @@ def test_lexer():
             break
         if data:
             lexer.parse(data)
-            for token in lexer.token():
-                print(token)
+            for tok in lexer.token():
+                print(tok)
 
 
 if __name__ == '__main__':

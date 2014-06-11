@@ -51,14 +51,13 @@ class Rule(object):
 
 class Token(object):
     """Real token parsed from input by rules."""
-    def __init__(self, name, value, lineno, curpos):
+    def __init__(self, name, value, position):
         self.name = name
         self.value = value
-        self.lineno = lineno
-        self.curpos = curpos
+        self.position = position
 
     def __repr__(self):
-        return '[{}] {}: {!r}'.format(self.lineno, self.name, self.value)
+        return 'Token<{}>: {!r}'.format(self.name, self.value)
 
     __str__ = __repr__
 
@@ -89,42 +88,58 @@ class Lexer(object):
     def token(self):
         """yeild a token dynamically per call."""
         length = len(self._input)
-        self.curpos = 0
-        self.lineno = 1
-        while self.curpos < length:
+        self.position = 0
+        while self.position < length:
             # look for a regular expression match
-            m = self._regex.match(self._input, self.curpos)
+            m = self._regex.match(self._input, self.position)
             if m:
                 name = m.lastgroup
                 value = m.group()
-                tok = Token(name, value, self.lineno, self.curpos)
-                self.curpos = m.end()
+                tok = Token(name, value, self.position)
+                self.position = m.end()
 
                 rule = self._rules[name]
                 handler = rule.handler
                 if handler:
                     interested = handler(tok)
-                    # lineno may be changed by `newline` token.
-                    self.lineno = tok.lineno
                     if not interested:
                         continue
 
                 yield tok
             else:
                 # nothing matched, see if in literals
-                char = self._input[self.curpos]
+                char = self._input[self.position]
                 if char in self._literals:
-                    tok = Token(char, char, self.lineno, self.curpos)
-                    self.curpos += 1
+                    tok = Token(char, char, self.position)
+                    self.position += 1
                     yield tok
                 else:
                     # non-literals, call error_handler instead
-                    tok = Token('error', self._input[self.curpos:],
-                                self.lineno, self.curpos)
+                    tok = Token('error', self._input[self.position],
+                                self.position)
                     skip_chars = self._error_handler(tok)
                     if not skip_chars:
-                        raise LexError('invalid input: %s' % tok.value)
-                    self.curpos += skip_chars
+                        raise LexError('%s invalid input: "%s"' %
+                                       (self.coordinate(tok), tok.value))
+                    self.position += skip_chars
+
+    def coordinate(self, tok):
+        """ Calculate coordinate [line %s, column %s] from `tok.position`.
+
+        `tok.position`: the offset from start of the parsed text
+
+        Count the amount of newlines between the beginning of the parsed
+        text and `position`. Then, count the column as an offset from
+        the last newline.
+        """
+        num_newlines = self._input.count('\n', 0, tok.position)
+
+        line_offset = self._input.rfind('\n', 0, tok.position)
+        if line_offset < 0:
+            line_offset = 0
+
+        return '[line %s, column %s]' % (num_newlines + 1,
+                                         tok.position - line_offset + 1)
 
     def _make_rules(self, grammar):
         """Parse grammar to generate rules."""
